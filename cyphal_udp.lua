@@ -2,7 +2,7 @@
 
 -- Protocol constants
 local CYPHAL_UDP_PORT = 9382 -- The port number used by Cyphal/UDP
-
+local CYPHAL_UDP_HEADER_SIZE = 24 -- The sizeof the Cyphal/UDP Header
 -- Custom protocol dissector
 local cyphal_udp = Proto("cyphaludp", "Cyphal/UDP Protocol 1.0 beta")
 
@@ -23,7 +23,10 @@ frame_index_eot = ProtoField.uint32("cyphal_udp.frame_index_eot", "frame_index_e
 frame_index = ProtoField.uint32("cyphal_udp.frame_index", "frame_index", base.DEC)
 end_of_transfer = ProtoField.bool("cyphal_udp.end_of_transfer", "end_of_transfer", base.NONE)
 user_data = ProtoField.uint16("cyphal_udp.user_data", "user_data", base.HEX)
-crc16_ccitt_false = ProtoField.uint16("cyphal_udp.crc16_ccitt_false", "crc16_ccitt_false (BE)", base.HEX)
+crc16_ccitt_false = ProtoField.uint16("cyphal_udp.crc16_ccitt_false", "CRC16-CCITT-FALSE (BE)", base.HEX)
+serialized_payload = ProtoField.bytes("cyphal_udp.serialized_payload", "serialized_payload", base.SPACE)
+serialized_payload_size = ProtoField.uint32("cyphal_udp.serialized_payload_size", "serialized_payload_size", base.DEC)
+crc32 = ProtoField.uint32("cyphal_udp.crc32", "CRC32-C (LE)", base.HEX)
 
 -- Protocol fields
 cyphal_udp.fields = {
@@ -41,7 +44,10 @@ cyphal_udp.fields = {
     frame_index,
     end_of_transfer,
     user_data,
-    crc16_ccitt_false
+    crc16_ccitt_false,
+    serialized_payload,
+    serialized_payload_size,
+    crc32
     -- Add more fields as needed
 }
 
@@ -93,6 +99,13 @@ local function dissect_cyphal_udp(buffer, pinfo, tree)
     cyphal_udp_tree:add_le(end_of_transfer, eot)
     cyphal_udp_tree:add_le(user_data, buffer(20, 2))
     cyphal_udp_tree:add(crc16_ccitt_false, buffer(22, 2))
+    local len = buffer:len()
+    local rem = len - CYPHAL_UDP_HEADER_SIZE - 4 -- the remaining bytes minus CRC32C
+    if rem > 0 then
+        cyphal_udp_tree:add_le(serialized_payload_size, rem)
+        cyphal_udp_tree:add_le(serialized_payload, buffer(24, rem))
+    end
+    cyphal_udp_tree:add_le(crc32, buffer(len-4, 4))
     -- Add more field dissectors as needed
 end
 
