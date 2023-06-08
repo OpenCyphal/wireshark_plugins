@@ -20,6 +20,6 @@ You may have to give your root password to install or `sudo cp`.
 
 ## Development
 
-To add features to the protocol plugin, simply copy, reload (`Ctrl+Shift+L` on Mac), and test.
+To add features to the protocol plugin, simply copy, reload (`Cmd+Shift+L` on Mac, `Ctrl+Shift+L` elsewhere), and test.
 
 Happy Decoding!
