@@ -93,7 +93,6 @@ local function dissect_cyphal_udp(buffer, pinfo, tree)
     header_tree:add_le(service_not_message, snm)
     header_tree:add_le(data_specifier, buffer(6, 2))
     header_tree:add_le(transfer_id, buffer(8, 8))
-    -- process the number as BE
     header_tree:add_le(frame_index_eot, buffer(16, 4))
     local fi = buffer(16, 4):le_uint()
     local fidx = bit.band(fi, 0x7FFFFFFF)
@@ -101,14 +100,21 @@ local function dissect_cyphal_udp(buffer, pinfo, tree)
     header_tree:add_le(frame_index, fidx)
     header_tree:add_le(end_of_transfer, eot)
     header_tree:add_le(user_data, buffer(20, 2))
+    -- process the number as BE
     header_tree:add(crc16_ccitt_false, buffer(22, 2))
     local len = buffer:len()
-    local rem = len - CYPHAL_UDP_HEADER_SIZE - 4 -- the remaining bytes minus CRC32C
+    local crc_size = 0
+    if eot == 1 then
+        crc_size = 4
+    end
+    local rem = len - CYPHAL_UDP_HEADER_SIZE - crc_size -- the remaining bytes minus CRC32C (if EOT)
     if rem > 0 then
         payload_tree:add_le(serialized_payload_size, rem)
         payload_tree:add_le(serialized_payload, buffer(24, rem))
     end
-    footer_tree:add_le(crc32, buffer(len-4, 4))
+    if eot == 1 then
+        footer_tree:add_le(crc32, buffer(len-crc_size, 4))
+    end
     -- Add more field dissectors as needed
 end
 
