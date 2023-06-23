@@ -127,7 +127,7 @@ cyphal_udp.fields = {
 }
 
 crc16_mismatch_expert = ProtoExpert.new("cyphal_udp.crc16_match", "crc16_match", expert.group.CHECKSUM, expert.severity.WARN)
-crc32_mismatch_export = ProtoExpert.new("cyphal_udp.crc32_match", "crc32_match", expert.group.CHECKSUM, expert.severity.WARN)
+crc32_mismatch_expert = ProtoExpert.new("cyphal_udp.crc32_match", "crc32_match", expert.group.CHECKSUM, expert.severity.WARN)
 
 cyphal_udp.experts = {
     crc16_mismatch_expert, crc32_mismatch_export
