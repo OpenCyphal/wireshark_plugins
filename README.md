@@ -5,12 +5,12 @@ A place to hold WireShark Filters for Cyphal Headers. These filters are based on
 | PROTOCOL | Status |
 |----------|--------|
 | Cyphal/UDP | working |
-| Cyphal/CAN | - |
+| Cyphal/CAN | working |
 | Cyphal/serial | - |
 
 Serial debugging with Wireshark may be possible with some tools which redirect the serial port over a named pipe.
 
-The older wireshark plugin which uses SocketCAN for UAVCAN should be possible to port over to Cyphal.
+The older Wireshark plugin which uses SocketCAN for UAVCAN/CAN is implemented in C in Wireshark itself. 
 
 ## Installation
 
