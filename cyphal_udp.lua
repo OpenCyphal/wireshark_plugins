@@ -1,4 +1,11 @@
 -- Cyphal/UDP Wireshark Plugin which supports only the Cyphal/UDP Header
+local cyphal_udp_info =
+{
+   version = "1.0 beta",
+   author = "Erik Rainey",
+   description = "Cyphal/UDP Dissector"
+}
+set_plugin_info(cyphal_udp_info)
 
 -- CRC32-C table lookup
 local crc32c_table = {
