@@ -89,7 +89,7 @@ cyphal_getinfo_software_vcs_revision_id = ProtoField.uint64("cyphal.getinfo.resp
 cyphal_getinfo_unique_id = ProtoField.bytes("cyphal.getinfo.response.unique_id", "Node Unique ID")
 cyphal_getinfo_name = ProtoField.string("cyphal.getinfo.response.name", "Node Name")
 cyphal_getinfo_software_image_crc = ProtoField.uint64("cyphal.getinfo.response.crc", "CRC-64-WE", base.HEX)
-cyphal_getinfo_certificate_of_authority = ProtoField.bytes("cyphal.getinfo.response.certificate_of_authority", "Certificate of Authority")
+cyphal_getinfo_certificate_of_authenticity = ProtoField.bytes("cyphal.getinfo.response.certificate_of_authenticity", "Certificate of Authenticity")
 
 cyphal_can.fields = {
     cyphal_can_id,
