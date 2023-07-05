@@ -76,7 +76,7 @@ local modeTable = {
     [3] = "SoftwareUpdate"
 }
 cyphal_heartbeat_mode = ProtoField.uint8("cyphal.heartbeat.mode", "heartbeat.mode", base.DEC, modeTable)
-cyphal_heartbeat_vssc = ProtoField.uint16("cyphal.heartbeat.vssc", "heartbeat.vssc", base.HEX)
+cyphal_heartbeat_vssc = ProtoField.uint8("cyphal.heartbeat.vssc", "heartbeat.vssc", base.HEX)
 
 -- GetInfo
 cyphal_getinfo_protocol_version_major = ProtoField.uint8("cyphal.getinfo.response.protocol_version.major", "protocol_version.major", base.DEC)
