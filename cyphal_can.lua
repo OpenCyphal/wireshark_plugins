@@ -37,7 +37,7 @@ cyphal_can_priority = ProtoField.uint32("cyphal_can.priority", "Priority", base.
 cyphal_can_len = ProtoField.uint8("cyphal_can.payload_length", "Payload Length", base.DEC)
 local service_or_messageTable = {
     [0] = "Message Transfer",
-    [1] = "Service Oriented Message"
+    [1] = "Service Transfer"
 }
 cyphal_can_service_not_message = ProtoField.uint32("cyphal_can.service_not_message", "Message Type", base.DEC, service_or_messageTable, 0x02000000)
 local request_or_responseTable = {
