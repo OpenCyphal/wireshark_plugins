@@ -59,7 +59,7 @@ cyphal_can_end_of_transfer = ProtoField.uint8("cyphal_can.end_of_transfer", "end
 cyphal_can_toggle = ProtoField.uint8("cyphal_can.toggle", "toggle", base.DEC, nil, 0x20)
 cyphal_can_transfer_id = ProtoField.uint8("cyphal_can.transfer_id", "transfer_id", base.DEC, nil, 0x1F)
 cyphal_can_tail_byte = ProtoField.uint8("cyphal_can.tail_byte", "tail_byte", base.HEX)
-cyphal_can_crc = ProtoField.uint16("cyphal_can.crc16", "crc16", base.HEX)
+cyphal_can_crc = ProtoField.uint16("cyphal_can.crc16", "CRC16/CCITT-FALSE", base.HEX)
 
 cyphal_heartbeat_uptime = ProtoField.uint32("cyphal.heartbeat.uptime", "heartbeat.uptime", base.DEC)
 local healthTable = {
