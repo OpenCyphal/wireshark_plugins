@@ -89,7 +89,7 @@ ipv4_src = ProtoField.ipv4("cyphal_udp.ip_src", "Source IPv4 Address")
 ipv4_dst = ProtoField.ipv4("cyphal_udp.ip_dst", "Destination IPv4 Address")
 ipv4_snm = ProtoField.bool("cyphal_udp.ip_service_not_message", "ip_service_not_message", base.NONE)
 version = ProtoField.uint8("cyphal_udp.version", "version", base.DEC)
-priority =ProtoField.uint8("cyphal_udp.priority", "priority", base.DEC)
+priority = ProtoField.uint8("cyphal_udp.priority", "priority", base.DEC)
 source_node_id = ProtoField.uint16("cyphal_udp.source_node_id", "source_node_id", base.DEC)
 destination_node_id = ProtoField.uint16("cyphal_udp.destination_node_id", "destination_node_id", base.DEC)
 data_specifier = ProtoField.uint16("cyphal_udp.data_specifier", "data_specifier", base.DEC)
@@ -144,14 +144,17 @@ cyphal_udp.experts = {
 ipv4_source_address_field = Field.new("ip.src")
 ipv4_destination_address_field = Field.new("ip.dst")
 
+local cyphal = require('cyphal')
+cyphal.register_cyphal_types(cyphal_udp)
+
 -- Function to dissect the custom protocol
 local function dissect_cyphal_udp(buffer, pinfo, tree)
+    local len = buffer:len()
+    
     -- Create a subtree for the custom protocol
     local metadata_tree = tree:add(cyphal_udp, buffer(), "Cyphal/UDP Metadata")
-    local header_tree = tree:add(cyphal_udp, buffer(), "Cyphal/UDP Header")
-    local payload_tree = tree:add(cyphal_udp, buffer(), "Cyphal/UDP Payload")
-    local footer_tree = tree:add(cyphal_udp, buffer(), "Cyphal/UDP Footer")
-
+    local header_tree = tree:add(cyphal_udp, buffer(0, CYPHAL_UDP_HEADER_SIZE), "Cyphal/UDP Header")
+    
     if (ipv4_source_address_field()) then
         local ip_src = ipv4_source_address_field().value
         metadata_tree:add(ipv4_src, ip_src)
@@ -174,24 +177,33 @@ local function dissect_cyphal_udp(buffer, pinfo, tree)
     local ds = buffer(6, 2):le_uint()
     local port_id = bit.band(ds, 0x7FFF)
     local snm = bit.rshift(bit.band(ds, 0x8000), 15)
-    local rnr = false
+    local rnr = 0
+    local fi = buffer(16, 4):le_uint()
+    local fidx = bit.band(fi, 0x7FFFFFFF)
+    local eot = bit.rshift(bit.band(fi, 0x80000000), 31)
+    local crc_size = 0
+    if eot == 1 then
+        crc_size = 4
+    end
+    local rem = len - CYPHAL_UDP_HEADER_SIZE - crc_size -- the remaining bytes minus CRC32C (if EOT)
+    local payload = buffer(CYPHAL_UDP_HEADER_SIZE, rem)
+    local payload_tree = tree:add(cyphal_udp, payload, "Cyphal/UDP Payload")
     if snm == 1 then
         if port_id > 16384 then
             port_id = port_id - 16384
-            rnr = true
+            rnr = 1
         end
         header_tree:add_le(request_not_response, rnr)
         header_tree:add_le(service_id, port_id)
+        cyphal.decode_services(cyphal_udp, payload, pinfo, payload_tree, rnr, port_id)
     else
         header_tree:add_le(subject_id, port_id)
+        cyphal.decode_messages(cyphal_udp, payload, pinfo, payload_tree, port_id)
     end
     header_tree:add_le(service_not_message, snm)
     header_tree:add_le(data_specifier, buffer(6, 2))
     header_tree:add_le(transfer_id, buffer(8, 8))
     header_tree:add_le(frame_index_eot, buffer(16, 4))
-    local fi = buffer(16, 4):le_uint()
-    local fidx = bit.band(fi, 0x7FFFFFFF)
-    local eot = bit.rshift(bit.band(fi, 0x80000000), 31)
     header_tree:add_le(frame_index, fidx)
     header_tree:add_le(end_of_transfer, eot)
     header_tree:add_le(user_data, buffer(20, 2))
@@ -204,22 +216,16 @@ local function dissect_cyphal_udp(buffer, pinfo, tree)
     if not captured_crc16 == computed_crc16 then
         header_tree:add_expert_info(PI_CHECKSUM, PI_WARN, "CRC16 Mismatch")
     end
-    local len = buffer:len()
-    local crc_size = 0
-    if eot == 1 then
-        crc_size = 4
-    end
-    local rem = len - CYPHAL_UDP_HEADER_SIZE - crc_size -- the remaining bytes minus CRC32C (if EOT)
     if rem > 0 then
         payload_tree:add_le(serialized_payload_size, rem)
-        payload_tree:add_le(serialized_payload, buffer(CYPHAL_UDP_HEADER_SIZE, rem))
+        payload_tree:add_le(serialized_payload, payload)
     end
     if eot == 1 then
         local captured_crc32 = buffer(len-crc_size, 4)
+        local footer_tree = tree:add(cyphal_udp, captured_crc32, "Cyphal/UDP Footer")
         footer_tree:add_le(crc32, captured_crc32)
         if fidx == 0 then -- We can only compute over 1 frame for now
-            local payload = buffer(CYPHAL_UDP_HEADER_SIZE, rem):bytes()
-            local crc32_local = crc32c_calc(payload)
+            local crc32_local = crc32c_calc(payload:bytes())
             footer_tree:add(computed_crc32, crc32_local)
             if not crc32_local == captured_crc32 then 
                 footer_tree:add_expert_info(PI_CHECKSUM, PI_WARN, "CRC32 Mismatch")

@@ -61,36 +61,6 @@ cyphal_can_transfer_id = ProtoField.uint8("cyphal_can.transfer_id", "transfer_id
 cyphal_can_tail_byte = ProtoField.uint8("cyphal_can.tail_byte", "tail_byte", base.HEX)
 cyphal_can_crc = ProtoField.uint16("cyphal_can.crc16", "CRC16/CCITT-FALSE", base.HEX)
 
-cyphal_heartbeat_uptime = ProtoField.uint32("cyphal.heartbeat.uptime", "heartbeat.uptime", base.DEC)
-local healthTable = {
-    [0] = "Nominal",
-    [1] = "Advisory",
-    [2] = "Caution",
-    [3] = "Warning"
-}
-cyphal_heartbeat_health = ProtoField.uint8("cyphal.heartbeat.health", "heartbeat.health", base.DEC, healthTable)
-local modeTable = {
-    [0] = "Operational",
-    [1] = "Initialization",
-    [2] = "Maintenance",
-    [3] = "SoftwareUpdate"
-}
-cyphal_heartbeat_mode = ProtoField.uint8("cyphal.heartbeat.mode", "heartbeat.mode", base.DEC, modeTable)
-cyphal_heartbeat_vssc = ProtoField.uint8("cyphal.heartbeat.vssc", "heartbeat.vssc", base.HEX)
-
--- GetInfo
-cyphal_getinfo_protocol_version_major = ProtoField.uint8("cyphal.getinfo.response.protocol_version.major", "protocol_version.major", base.DEC)
-cyphal_getinfo_protocol_version_minor = ProtoField.uint8("cyphal.getinfo.response.protocol_version.minor", "protocol_version.minor", base.DEC)
-cyphal_getinfo_hardware_version_major = ProtoField.uint8("cyphal.getinfo.response.hardware_version.major", "hardware_version.major", base.DEC)
-cyphal_getinfo_hardware_version_minor = ProtoField.uint8("cyphal.getinfo.response.hardware_version.minor", "hardware_version.minor", base.DEC)
-cyphal_getinfo_software_version_major = ProtoField.uint8("cyphal.getinfo.response.software_version.major", "software_version.major", base.DEC)
-cyphal_getinfo_software_version_minor = ProtoField.uint8("cyphal.getinfo.response.software_version.minor", "software_version.minor", base.DEC)
-cyphal_getinfo_software_vcs_revision_id = ProtoField.uint64("cyphal.getinfo.response.cyphal_getinfo_software_vcs_revision_id", "SW VCS Revision ID", base.HEX)
-cyphal_getinfo_unique_id = ProtoField.bytes("cyphal.getinfo.response.unique_id", "Node Unique ID")
-cyphal_getinfo_name = ProtoField.string("cyphal.getinfo.response.name", "Node Name")
-cyphal_getinfo_software_image_crc = ProtoField.uint64("cyphal.getinfo.response.crc", "CRC-64-WE", base.HEX)
-cyphal_getinfo_certificate_of_authenticity = ProtoField.bytes("cyphal.getinfo.response.certificate_of_authenticity", "Certificate of Authenticity")
-
 cyphal_can.fields = {
     cyphal_can_id,
     cyphal_can_priority,
@@ -108,26 +78,11 @@ cyphal_can.fields = {
     cyphal_can_toggle,
     cyphal_can_transfer_id,
     cyphal_can_crc,
-    -- heartbeat
-    cyphal_heartbeat_uptime,
-    cyphal_heartbeat_health,
-    cyphal_heartbeat_mode,
-    cyphal_heartbeat_vssc,
-    -- GetInfo
-    cyphal_getinfo_protocol_version_major,
-    cyphal_getinfo_protocol_version_minor,
-    cyphal_getinfo_hardware_version_major,
-    cyphal_getinfo_hardware_version_minor,
-    cyphal_getinfo_software_version_major,
-    cyphal_getinfo_software_version_minor,
-    cyphal_getinfo_software_vcs_revision_id,
-    cyphal_getinfo_unique_id,
-    cyphal_getinfo_name,
-    cyphal_getinfo_software_image_crc,
-    cyphal_getinfo_certificate_of_authority,
     -- Add more fields
-
 }
+
+local cyphal = require('cyphal')
+cyphal.register_cyphal_types(cyphal_can)
 
 -- Function to dissect the CYPHAL/CAN
 function cyphal_can.dissector(buffer, pinfo, tree)
@@ -175,43 +130,7 @@ function cyphal_can.dissector(buffer, pinfo, tree)
       header_tree:add(cyphal_can_destination_node_id, can_id)
       local service_id = bit.band(bit.rshift(can_id, 14), 0x1FF)
       -- Service Decodes based on service_id
-      if service_id == 430 then -- GetInfo
-          if rnr == 1 then -- Request
-          else -- Response
-              local offset = 0
-              payload_tree:add(cyphal_getinfo_protocol_version_major, payload(offset, 1))
-              offset = offset + 1
-              payload_tree:add(cyphal_getinfo_protocol_version_minor, payload(offset, 1))
-              offset = offset + 1
-              payload_tree:add(cyphal_getinfo_hardware_version_major, payload(offset, 1))
-              offset = offset + 1
-              payload_tree:add(cyphal_getinfo_hardware_version_minor, payload(offset, 1))
-              offset = offset + 1
-              payload_tree:add(cyphal_getinfo_software_version_major, payload(offset, 1))
-              offset = offset + 1
-              payload_tree:add(cyphal_getinfo_software_version_minor, payload(offset, 1))
-              offset = offset + 1
-              payload_tree:add(cyphal_getinfo_software_vcs_revision_id, payload(offset, 8))
-              offset = offset + 8
-              payload_tree:add(cyphal_getinfo_unique_id, payload(offset, 16))
-              offset = offset + 16
-              local len = payload(offset, 1):uint()
-              offset = offset + 1
-              payload_tree:add(cyphal_getinfo_name, payload(offset, len))
-              offset = offset + len
-              len = payload(offset, 1):uint()
-              offset = offset + 1
-              if len > 0 then
-                  payload_tree:add(cyphal_getinfo_software_image_crc, payload(offset, len))
-              end
-              offset = offset + len
-              len = payload(offset, 1):uint()
-              offset = offset + 1
-              if len > 0 then
-                  payload_tree:add(cyphal_getinfo_certificate_of_authority, payload(offset, len))
-              end
-          end
-      end
+      cyphal.decode_services(cyphal_can, payload, pinfo, payload_tree, rnr, service_id)
     else -- Messages
       header_tree:add(cyphal_can_anonymous, can_id)
       local resv = bit.band(bit.rshift(can_id, 20), 0x3)
@@ -224,12 +143,7 @@ function cyphal_can.dissector(buffer, pinfo, tree)
           header_tree:add_expert_info(PI_MALFORMED, PI_WARN, "Reserved (7) is incorrect")
       end
       local subject_id = bit.band(bit.rshift(can_id, 8), 0x1FFF)
-      if subject_id == 7509 then -- Heartbeat!
-          payload_tree:add_le(cyphal_heartbeat_uptime, payload(0, 4))
-          payload_tree:add(cyphal_heartbeat_health, payload(4, 1))
-          payload_tree:add(cyphal_heartbeat_mode, payload(5, 1))
-          payload_tree:add(cyphal_heartbeat_vssc, payload(6, 1))
-      end
+      cyphal.decode_messages(payload, pinfo, payload_tree, subject_id)
     end
     header_tree:add(cyphal_can_source_node_id, can_id)
 end
