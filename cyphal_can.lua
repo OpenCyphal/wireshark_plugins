@@ -61,36 +61,6 @@ cyphal_can_transfer_id = ProtoField.uint8("cyphal_can.transfer_id", "transfer_id
 cyphal_can_tail_byte = ProtoField.uint8("cyphal_can.tail_byte", "tail_byte", base.HEX)
 cyphal_can_crc = ProtoField.uint16("cyphal_can.crc16", "CRC16/CCITT-FALSE", base.HEX)
 
-cyphal_heartbeat_uptime = ProtoField.uint32("cyphal.heartbeat.uptime", "heartbeat.uptime", base.DEC)
-local healthTable = {
-    [0] = "Nominal",
-    [1] = "Advisory",
-    [2] = "Caution",
-    [3] = "Warning"
-}
-cyphal_heartbeat_health = ProtoField.uint8("cyphal.heartbeat.health", "heartbeat.health", base.DEC, healthTable)
-local modeTable = {
-    [0] = "Operational",
-    [1] = "Initialization",
-    [2] = "Maintenance",
-    [3] = "SoftwareUpdate"
-}
-cyphal_heartbeat_mode = ProtoField.uint8("cyphal.heartbeat.mode", "heartbeat.mode", base.DEC, modeTable)
-cyphal_heartbeat_vssc = ProtoField.uint8("cyphal.heartbeat.vssc", "heartbeat.vssc", base.HEX)
-
--- GetInfo
-cyphal_getinfo_protocol_version_major = ProtoField.uint8("cyphal.getinfo.response.protocol_version.major", "protocol_version.major", base.DEC)
-cyphal_getinfo_protocol_version_minor = ProtoField.uint8("cyphal.getinfo.response.protocol_version.minor", "protocol_version.minor", base.DEC)
-cyphal_getinfo_hardware_version_major = ProtoField.uint8("cyphal.getinfo.response.hardware_version.major", "hardware_version.major", base.DEC)
-cyphal_getinfo_hardware_version_minor = ProtoField.uint8("cyphal.getinfo.response.hardware_version.minor", "hardware_version.minor", base.DEC)
-cyphal_getinfo_software_version_major = ProtoField.uint8("cyphal.getinfo.response.software_version.major", "software_version.major", base.DEC)
-cyphal_getinfo_software_version_minor = ProtoField.uint8("cyphal.getinfo.response.software_version.minor", "software_version.minor", base.DEC)
-cyphal_getinfo_software_vcs_revision_id = ProtoField.uint64("cyphal.getinfo.response.cyphal_getinfo_software_vcs_revision_id", "SW VCS Revision ID", base.HEX)
-cyphal_getinfo_unique_id = ProtoField.bytes("cyphal.getinfo.response.unique_id", "Node Unique ID")
-cyphal_getinfo_name = ProtoField.string("cyphal.getinfo.response.name", "Node Name")
-cyphal_getinfo_software_image_crc = ProtoField.uint64("cyphal.getinfo.response.crc", "CRC-64-WE", base.HEX)
-cyphal_getinfo_certificate_of_authenticity = ProtoField.bytes("cyphal.getinfo.response.certificate_of_authenticity", "Certificate of Authenticity")
-
 cyphal_can.fields = {
     cyphal_can_id,
     cyphal_can_priority,
@@ -108,26 +78,16 @@ cyphal_can.fields = {
     cyphal_can_toggle,
     cyphal_can_transfer_id,
     cyphal_can_crc,
-    -- heartbeat
-    cyphal_heartbeat_uptime,
-    cyphal_heartbeat_health,
-    cyphal_heartbeat_mode,
-    cyphal_heartbeat_vssc,
-    -- GetInfo
-    cyphal_getinfo_protocol_version_major,
-    cyphal_getinfo_protocol_version_minor,
-    cyphal_getinfo_hardware_version_major,
-    cyphal_getinfo_hardware_version_minor,
-    cyphal_getinfo_software_version_major,
-    cyphal_getinfo_software_version_minor,
-    cyphal_getinfo_software_vcs_revision_id,
-    cyphal_getinfo_unique_id,
-    cyphal_getinfo_name,
-    cyphal_getinfo_software_image_crc,
-    cyphal_getinfo_certificate_of_authority,
     -- Add more fields
-
 }
+
+local cyphal_utils = require('cyphal_utils')
+cyphal_utils.run_nnvg_on_cyphal_subfolders()
+local cyphal = require('cyphal')
+cyphal.register_cyphal_types(cyphal_can)
+
+-- load frame processor
+local frames = require('cyphal_frames')
 
 -- Function to dissect the CYPHAL/CAN
 function cyphal_can.dissector(buffer, pinfo, tree)
@@ -160,10 +120,14 @@ function cyphal_can.dissector(buffer, pinfo, tree)
     footer_tree:add(cyphal_can_transfer_id, tail_buffer, tail_byte)
     local sot = bit.rshift(bit.band(tail_byte, 0x80), 7)
     local eot = bit.rshift(bit.band(tail_byte, 0x40), 6)
+    local tgl = bit.rshift(bit.band(tail_byte, 0x20), 5)
     if sot == 0 and eot == 1 then
       payload_tree:add(cyphal_can_crc, payload(payload_len - 2, 2))
     end
+    local tid = bit.band(tail_byte, 0x1F)
     local snm = bit.band(bit.rshift(can_id, 25), 0x1)
+    -- print("SOT ", sot, "EOT ", eot, " TGL ", tgl, " TID ", tid)
+
     if (snm == 1) then -- Services
       local rnr = bit.band(bit.rshift(can_id, 24), 0x1)
       header_tree:add(cypahl_can_request_not_response, can_id)
@@ -173,48 +137,21 @@ function cyphal_can.dissector(buffer, pinfo, tree)
       end
       header_tree:add(cyphal_can_service_id, can_id)
       header_tree:add(cyphal_can_destination_node_id, can_id)
+      local snid = bit.band(bit.rshift(can_id, 0), 0x7F)
+      local dnid = bit.band(bit.rshift(can_id, 7), 0x7F)
       local service_id = bit.band(bit.rshift(can_id, 14), 0x1FF)
-      -- Service Decodes based on service_id
-      if service_id == 430 then -- GetInfo
-          if rnr == 1 then -- Request
-          else -- Response
-              local offset = 0
-              payload_tree:add(cyphal_getinfo_protocol_version_major, payload(offset, 1))
-              offset = offset + 1
-              payload_tree:add(cyphal_getinfo_protocol_version_minor, payload(offset, 1))
-              offset = offset + 1
-              payload_tree:add(cyphal_getinfo_hardware_version_major, payload(offset, 1))
-              offset = offset + 1
-              payload_tree:add(cyphal_getinfo_hardware_version_minor, payload(offset, 1))
-              offset = offset + 1
-              payload_tree:add(cyphal_getinfo_software_version_major, payload(offset, 1))
-              offset = offset + 1
-              payload_tree:add(cyphal_getinfo_software_version_minor, payload(offset, 1))
-              offset = offset + 1
-              payload_tree:add(cyphal_getinfo_software_vcs_revision_id, payload(offset, 8))
-              offset = offset + 8
-              payload_tree:add(cyphal_getinfo_unique_id, payload(offset, 16))
-              offset = offset + 16
-              local len = payload(offset, 1):uint()
-              offset = offset + 1
-              payload_tree:add(cyphal_getinfo_name, payload(offset, len))
-              offset = offset + len
-              len = payload(offset, 1):uint()
-              offset = offset + 1
-              if len > 0 then
-                  payload_tree:add(cyphal_getinfo_software_image_crc, payload(offset, len))
-              end
-              offset = offset + len
-              len = payload(offset, 1):uint()
-              offset = offset + 1
-              if len > 0 then
-                  payload_tree:add(cyphal_getinfo_certificate_of_authority, payload(offset, len))
-              end
-          end
+      -- CAN requires in order so the frame index is nil
+      frames.add(payload, snid, dnid, service_id, tid, nil)
+      if eot == 1 then
+          transfer = frames.extract(snid, dnid, service_id, tid)
+          -- Service Decodes based on service_id
+          cyphal.decode_services(cyphal_can, transfer, pinfo, payload_tree, rnr, service_id)
+      else
+        payload_tree:add_expert_info(PI_RECEIVE, PI_COMMENT, "Incomplete multiframe transfer, check frame with EOT=1")
       end
     else -- Messages
       header_tree:add(cyphal_can_anonymous, can_id)
-      local resv = bit.band(bit.rshift(can_id, 20), 0x3)
+      local resv = bit.band(bit.rshift(can_id, 21), 0x7)
       if resv ~= 3 then -- not equal to
           header_tree:add_expert_info(PI_MALFORMED, PI_WARN, "Reserved fields(23,22,21) are incorrect")
       end
@@ -223,13 +160,18 @@ function cyphal_can.dissector(buffer, pinfo, tree)
       if r4 ~= 0 then -- not equal to
           header_tree:add_expert_info(PI_MALFORMED, PI_WARN, "Reserved (7) is incorrect")
       end
+      local snid = bit.band(bit.rshift(can_id, 0), 0x7F)
       local subject_id = bit.band(bit.rshift(can_id, 8), 0x1FFF)
-      if subject_id == 7509 then -- Heartbeat!
-          payload_tree:add_le(cyphal_heartbeat_uptime, payload(0, 4))
-          payload_tree:add(cyphal_heartbeat_health, payload(4, 1))
-          payload_tree:add(cyphal_heartbeat_mode, payload(5, 1))
-          payload_tree:add(cyphal_heartbeat_vssc, payload(6, 1))
-      end
+      -- CAN requires in order so the frame index is nil
+      -- Use Anonymous ID for destination
+      frames.add(payload, snid, 0, subject_id, tid, nil)
+      if eot == 1 then
+          -- extract all the frames as a transfer
+          local transfer = frames.extract(snid, 0, subject_id, tid)
+          cyphal.decode_messages(cyphal_can, transfer, pinfo, payload_tree, subject_id)
+        else
+            payload_tree:add_expert_info(PI_RECEIVE, PI_COMMENT, "Incomplete multiframe transfer, check frame with EOT=1")
+        end
     end
     header_tree:add(cyphal_can_source_node_id, can_id)
 end
