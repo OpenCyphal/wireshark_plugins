@@ -144,7 +144,7 @@ ipv4_source_address_field = Field.new("ip.src")
 ipv4_destination_address_field = Field.new("ip.dst")
 
 local cyphal = require('cyphal')
-cyphal.register_messages(cyphal_udp)
+cyphal.register_cyphal_types(cyphal_udp)
 
 -- Function to dissect the custom protocol
 local function dissect_cyphal_udp(buffer, pinfo, tree)
@@ -171,7 +171,7 @@ local function dissect_cyphal_udp(buffer, pinfo, tree)
     local ds = buffer(6, 2):le_uint()
     local port_id = bit.band(ds, 0x7FFF)
     local snm = bit.rshift(bit.band(ds, 0x8000), 15)
-    local rnr = false
+    local rnr = 0
     local fi = buffer(16, 4):le_uint()
     local fidx = bit.band(fi, 0x7FFFFFFF)
     local eot = bit.rshift(bit.band(fi, 0x80000000), 31)
@@ -185,10 +185,11 @@ local function dissect_cyphal_udp(buffer, pinfo, tree)
     if snm == 1 then
         if port_id > 16384 then
             port_id = port_id - 16384
-            rnr = true
+            rnr = 1
         end
         header_tree:add_le(request_not_response, rnr)
         header_tree:add_le(service_id, port_id)
+        cyphal.decode_services(payload, pinfo, payload_tree, rnr, port_id)
     else
         header_tree:add_le(subject_id, port_id)
         cyphal.decode_messages(payload, pinfo, payload_tree, port_id)

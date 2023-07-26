@@ -1,20 +1,20 @@
 
-local cyphal_heartbeat_uptime = ProtoField.uint32("cyphal.heartbeat.uptime", "heartbeat.uptime", base.DEC)
+local cyphal_heartbeat_uptime = ProtoField.uint32("uavcan.node.heartbeat.uptime", "uavcan.node.heartbeat.uptime", base.DEC)
 local healthTable = {
     [0] = "Nominal",
     [1] = "Advisory",
     [2] = "Caution",
     [3] = "Warning"
 }
-local cyphal_heartbeat_health = ProtoField.uint8("cyphal.heartbeat.health", "heartbeat.health", base.DEC, healthTable)
+local cyphal_heartbeat_health = ProtoField.uint8("uavcan.node.heartbeat.health", "uavcan.node.heartbeat.health", base.DEC, healthTable)
 local modeTable = {
     [0] = "Operational",
     [1] = "Initialization",
     [2] = "Maintenance",
     [3] = "SoftwareUpdate"
 }
-local cyphal_heartbeat_mode = ProtoField.uint8("cyphal.heartbeat.mode", "heartbeat.mode", base.DEC, modeTable)
-local cyphal_heartbeat_vssc = ProtoField.uint8("cyphal.heartbeat.vssc", "heartbeat.vssc", base.HEX)
+local cyphal_heartbeat_mode = ProtoField.uint8("uavcan.node.heartbeat.mode", "uavcan.node.heartbeat.mode", base.DEC, modeTable)
+local cyphal_heartbeat_vssc = ProtoField.uint8("uavcan.node.heartbeat.vssc", "uavcan.node.heartbeat.vssc", base.HEX)
 
 -- Registers the fields of the {{message}} to the Proto
 --@param cyphal_proto The Proto to add the fields to
