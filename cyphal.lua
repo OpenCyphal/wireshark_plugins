@@ -1,3 +1,19 @@
+local ebnf = require("lua-ebnf")
+local grammarFile = "dsdl.enbf"
+local grammarENBF = io.open(grammarfile):read("*a")
+-- Generate the grammar from the ENBF
+local grammar = enbf.parse(grammarENBF)
+-- Generate the parser from the EBNF grammar
+local parser = ebnf.generate(grammar)
+-- Find all the local .dsdl files and parse them
+local dsdl = io.open("434.GetTransportStatistics.0.1.dsdl"):read("*a")
+-- Use the parser to match and discover tokens
+local tokens = parser:match(dsdl)
+-- Print the discovered tokens
+for _, token in ipairs(tokens) do
+    print(token)
+end
+
 local uavcan_node_heartbeat = require('uavcan_node_heartbeat')
 local uavcan_node_getinfo = require('uavcan_node_getinfo')
 
