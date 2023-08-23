@@ -14,7 +14,9 @@ The older Wireshark plugin which uses SocketCAN for UAVCAN/CAN is implemented in
 
 ## Installation
 
-Copy the `*.lua` to your WireShark Plugins directory (consult the docs to find where).
+Copy the `*.lua` to your WireShark Plugins directory. The location of the Lua plugin directory can be found via Help → About → Folders:
+
+<img width="675" alt="image" src="https://github.com/OpenCyphal/wireshark_plugins/assets/3298404/7bde8f6d-8c1d-41f7-81d8-f6769ef456ae">
 
 You may have to give your root password to install or `sudo cp`.
 
