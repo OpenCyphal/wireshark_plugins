@@ -81,6 +81,7 @@ end
 -- Protocol constants
 local CYPHAL_UDP_PORT = 9382 -- The port number used by Cyphal/UDP
 local CYPHAL_UDP_HEADER_SIZE = 24 -- The sizeof the Cyphal/UDP Header
+local ANONYMOUS_UDP_NODE_ID = 65535 -- The Anonymous Node ID in Cyphal/UDP (not the same as in CAN!)
 -- Custom protocol dissector
 local cyphal_udp = Proto("cyphaludp", "Cyphal/UDP Protocol 1.0 beta")
 
@@ -164,7 +165,12 @@ local function dissect_cyphal_udp(buffer, pinfo, tree)
     header_tree:add_le(version, buffer(0, 1))
     header_tree:add_le(priority, buffer(1, 1))
     header_tree:add_le(source_node_id, buffer(2, 2))
-    header_tree:add_le(destination_node_id, buffer(4, 2))
+    local dst_node_id = buffer(4, 2):le_uint()
+    if dst_node_id == ANONYMOUS_UDP_NODE_ID then
+        header_tree:add_expert_info(PI_PROTOCOL, PI_NOTE, "Anonymous/Broadcast Destintation Node ID")
+    else
+        header_tree:add_le(destination_node_id, buffer(4, 2))
+    end
     local ds = buffer(6, 2):le_uint()
     local port_id = bit.band(ds, 0x7FFF)
     local snm = bit.rshift(bit.band(ds, 0x8000), 15)
