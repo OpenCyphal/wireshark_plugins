@@ -133,7 +133,7 @@ function cyphal_can.dissector(buffer, pinfo, tree)
       cyphal.decode_services(cyphal_can, payload, pinfo, payload_tree, rnr, service_id)
     else -- Messages
       header_tree:add(cyphal_can_anonymous, can_id)
-      local resv = bit.band(bit.rshift(can_id, 20), 0x3)
+      local resv = bit.band(bit.rshift(can_id, 21), 0x7)
       if resv ~= 3 then -- not equal to
           header_tree:add_expert_info(PI_MALFORMED, PI_WARN, "Reserved fields(23,22,21) are incorrect")
       end
