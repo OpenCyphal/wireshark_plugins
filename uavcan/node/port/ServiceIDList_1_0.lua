@@ -1,5 +1,6 @@
 -- constants
-local EXTENT = 1024
+local BIT_EXTENT = 1024
+local EXTENT = BIT_EXTENT / 8
 local BIT_CAPACITY = 512
 local CAPACITY = BIT_CAPACITY / 8
 
@@ -13,11 +14,12 @@ local uavcan_node_port_ServiceIDList_1_0_registered = false
 
 -- Registers the fields of the message to the Proto
 -- @param cyphal_proto The Proto to add the fields to
-function register_uavcan_node_port_ServiceIDList_1_0(cyphal_proto)
+local function register_uavcan_node_port_ServiceIDList_1_0(cyphal_proto)
     if not uavcan_node_port_ServiceIDList_1_0_registered then
         table.insert(cyphal_proto.fields, uavcan_node_port_ServiceIDList_1_0_tag)
         table.insert(cyphal_proto.fields, uavcan_node_port_ServiceIDList_1_0_len)
         uavcan_node_port_ServiceID_1_0.register(cyphal_proto)
+        uavcan_node_port_ServiceIDList_1_0_registered = true
     end
 end
 
@@ -28,7 +30,7 @@ local function uint16_to_bytes_le(value)
     return arr
 end
 
-function decode_uavcan_node_port_ServiceIDList_1_0(proto, payload, pinfo, payload_tree)
+local function decode_uavcan_node_port_ServiceIDList_1_0(proto, payload, pinfo, payload_tree)
     local offset = 0
     -- bit array
     local mask = payload(offset, CAPACITY):bytes()
@@ -49,6 +51,7 @@ function decode_uavcan_node_port_ServiceIDList_1_0(proto, payload, pinfo, payloa
 end
 
 return {
-    register = register_uavcan_node_port_ServiceIDList_1_0,
-    decode = decode_uavcan_node_port_ServiceIDList_1_0
+    register = register_uavcan_node_port_ServiceIDList_1_0
+    , decode = decode_uavcan_node_port_ServiceIDList_1_0
+    , extent = EXTENT
 }

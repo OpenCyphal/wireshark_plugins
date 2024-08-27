@@ -1,5 +1,7 @@
 -- constants
 local PORT_ID = 7510
+local BIT_EXTENT = 67728
+local EXTENT = BIT_EXTENT / 8
 
 -- constituent types (observe location in the heirarchy!)
 local uavcan_node_port_SubjectIDList_1_0 = require('SubjectIDList_1_0')
@@ -17,7 +19,7 @@ local uavcan_node_port_List_1_0_registered = false
 
 -- Registers the fields of the message to the Proto
 -- @param cyphal_proto The Proto to add the fields to
-function register_uavcan_node_port_List_1_0(cyphal_proto)
+local function register_uavcan_node_port_List_1_0(cyphal_proto)
     if not uavcan_node_port_List_1_0_registered then
         table.insert(cyphal_proto.fields, uavcan_node_port_List_1_0_delimiter)
         table.insert(cyphal_proto.fields, uavcan_node_port_List_1_0_publishes)
@@ -31,9 +33,22 @@ function register_uavcan_node_port_List_1_0(cyphal_proto)
     end
 end
 
-function decode_uavcan_node_port_List_1_0(proto, payload, pinfo, payload_tree)
+local function decode_uavcan_node_port_List_1_0(proto, payload, pinfo, payload_tree, label)
     local offset = 0
     local delimiter = 0
+    local remainder = payload:len() - offset
+    local extent = 0
+    if payload:len() == 0 then
+        return 0
+    end
+    if remainder < EXTENT then
+        extent = remainder
+    else
+        extent = EXTENT
+    end
+
+    local subtree = payload_tree:add(proto, payload(0, extent), "uavcan.node.port.List_1_0")
+    subtree:prepend_text(string.format("%s of type ", label))
 
     -- publishes
     delimiter = payload(offset, 4):le_uint()
@@ -74,7 +89,8 @@ function decode_uavcan_node_port_List_1_0(proto, payload, pinfo, payload_tree)
 end
 
 return {
-    register = register_uavcan_node_port_List_1_0,
-    decode = decode_uavcan_node_port_List_1_0,
-    subject_id = PORT_ID
+    register = register_uavcan_node_port_List_1_0
+    , decode = decode_uavcan_node_port_List_1_0
+    , extent = EXTENT
+    , subject_id = PORT_ID
 }

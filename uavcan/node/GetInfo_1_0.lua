@@ -17,7 +17,7 @@ local uavcan_node_GetInfo_1_0_registered = false
 
 -- Registers the fields of the {{service}} to the Proto
 --@param cyphal_proto The Proto to add the fields to
-function register_uavcan_node_GetInfo_1_0(cyphal_proto)
+local function register_uavcan_node_GetInfo_1_0(cyphal_proto)
     if not uavcan_node_GetInfo_1_0_registered then
         table.insert(cyphal_proto.fields, uavcan_node_GetInfo_1_0_protocol_version_major)
         table.insert(cyphal_proto.fields, uavcan_node_GetInfo_1_0_protocol_version_minor)
@@ -34,43 +34,56 @@ function register_uavcan_node_GetInfo_1_0(cyphal_proto)
     end
 end
 
-function decode_uavcan_node_GetInfo_1_0(proto, payload, pinfo, payload_tree, request_not_response)
+local function decode_uavcan_node_GetInfo_1_0_Request(proto, payload, pinfo, payload_tree, request_not_response)
     local offset = 0
+    return offset
+end
+
+local function decode_uavcan_node_GetInfo_1_0_Response(proto, payload, pinfo, payload_tree, request_not_response)
+    if payload:len() == 0 then
+        return 0
+    end
+    local offset = 0
+    payload_tree:add(uavcan_node_GetInfo_1_0_protocol_version_major, payload(offset, 1))
+    offset = offset + 1
+    payload_tree:add(uavcan_node_GetInfo_1_0_protocol_version_minor, payload(offset, 1))
+    offset = offset + 1
+    payload_tree:add(uavcan_node_GetInfo_1_0_hardware_version_major, payload(offset, 1))
+    offset = offset + 1
+    payload_tree:add(uavcan_node_GetInfo_1_0_hardware_version_minor, payload(offset, 1))
+    offset = offset + 1
+    payload_tree:add(uavcan_node_GetInfo_1_0_software_version_major, payload(offset, 1))
+    offset = offset + 1
+    payload_tree:add(uavcan_node_GetInfo_1_0_software_version_minor, payload(offset, 1))
+    offset = offset + 1
+    payload_tree:add(uavcan_node_GetInfo_1_0_software_vcs_revision_id, payload(offset, 8))
+    offset = offset + 8
+    payload_tree:add(uavcan_node_GetInfo_1_0_unique_id, payload(offset, 16))
+    offset = offset + 16
+    local len = payload(offset, 1):uint()
+    offset = offset + 1
+    payload_tree:add(uavcan_node_GetInfo_1_0_name, payload(offset, len))
+    offset = offset + len
+    len = payload(offset, 1):uint()
+    offset = offset + 1
+    if len > 0 then
+        payload_tree:add(uavcan_node_GetInfo_1_0_software_image_crc, payload(offset, len))
+    end
+    offset = offset + len
+    len = payload(offset, 1):uint()
+    offset = offset + 1
+    if len > 0 then
+        payload_tree:add(uavcan_node_GetInfo_1_0_certificate_of_authenticity, payload(offset, len))
+        offset = offset + len
+    end
+    return offset
+end
+
+local function decode_uavcan_node_GetInfo_1_0(proto, payload, pinfo, payload_tree, request_not_response)
     if request_not_response == 1 then -- Request
+        return decode_uavcan_node_GetInfo_1_0_Request(proto, payload, pinfo, payload_tree)
     else -- Response
-        payload_tree:add(uavcan_node_GetInfo_1_0_protocol_version_major, payload(offset, 1))
-        offset = offset + 1
-        payload_tree:add(uavcan_node_GetInfo_1_0_protocol_version_minor, payload(offset, 1))
-        offset = offset + 1
-        payload_tree:add(uavcan_node_GetInfo_1_0_hardware_version_major, payload(offset, 1))
-        offset = offset + 1
-        payload_tree:add(uavcan_node_GetInfo_1_0_hardware_version_minor, payload(offset, 1))
-        offset = offset + 1
-        payload_tree:add(uavcan_node_GetInfo_1_0_software_version_major, payload(offset, 1))
-        offset = offset + 1
-        payload_tree:add(uavcan_node_GetInfo_1_0_software_version_minor, payload(offset, 1))
-        offset = offset + 1
-        payload_tree:add(uavcan_node_GetInfo_1_0_software_vcs_revision_id, payload(offset, 8))
-        offset = offset + 8
-        payload_tree:add(uavcan_node_GetInfo_1_0_unique_id, payload(offset, 16))
-        offset = offset + 16
-        local len = payload(offset, 1):uint()
-        offset = offset + 1
-        payload_tree:add(uavcan_node_GetInfo_1_0_name, payload(offset, len))
-        offset = offset + len
-        len = payload(offset, 1):uint()
-        offset = offset + 1
-        if len > 0 then
-            payload_tree:add(uavcan_node_GetInfo_1_0_software_image_crc, payload(offset, len))
-        end
-        offset = offset + len
-        len = payload(offset, 1):uint()
-        offset = offset + 1
-        if len > 0 then
-            payload_tree:add(uavcan_node_GetInfo_1_0_certificate_of_authority, payload(offset, len))
-            offset = offset + len
-        end
-        return offset
+        return decode_uavcan_node_GetInfo_1_0_Response(proto, payload, pinfo, payload_tree)
     end
 end
 
