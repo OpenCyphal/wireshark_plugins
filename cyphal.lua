@@ -17,13 +17,15 @@ local function decode_cyphal_messages(proto, payload, pinfo, payload_tree, subje
     elseif subject_id == uavcan_node_port_List_1_0.subject_id then
         uavcan_node_port_List_1_0.decode(proto, payload, pinfo, payload_tree, "payload")
     else
-        warn("Unknown cyphal message with subject id: ", subject_id);
+        payload_tree:add_expert_info(PI_RECEIVE, PI_COMMENT, "Unknown Message type")
     end
 end
 
 local function decode_cyphal_services(proto, payload, pinfo, payload_tree, request_not_response, service_id)
     if service_id == uavcan_node_GetInfo_1_0.service_id then
         uavcan_node_GetInfo_1_0.decode(proto, payload, pinfo, payload_tree, request_not_response)
+    else
+        payload_tree:add_expert_info(PI_RECEIVE, PI_COMMENT, "Unknown Service type")
     end
 end
 
