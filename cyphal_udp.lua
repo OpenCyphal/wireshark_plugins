@@ -174,10 +174,11 @@ cyphal_udp.experts = {
 
 ipv4_destination_address_field = Field.new("ip.dst")
 
+-- Returns: subject_id (or nil for services), payload_tvb (or nil)
 local function dissect_cyphal_udp_v10(buffer, header_tree, payload_tree, footer_tree)
     if buffer:len() < CYPHAL_UDP_V10_HEADER_SIZE then
         header_tree:add_expert_info(PI_MALFORMED, PI_ERROR, "Truncated Cyphal/UDP v1.0 header")
-        return
+        return nil, nil
     end
     header_tree:add_le(version, buffer(0, 1))
     header_tree:add_le(priority, buffer(1, 1))
@@ -192,6 +193,7 @@ local function dissect_cyphal_udp_v10(buffer, header_tree, payload_tree, footer_
     local port_id = bit.band(ds, 0x7FFF)
     local snm = bit.rshift(bit.band(ds, 0x8000), 15)
     local rnr = false
+    local extracted_subject_id = nil
     if snm == 1 then
         if port_id > 16384 then
             port_id = port_id - 16384
@@ -201,6 +203,7 @@ local function dissect_cyphal_udp_v10(buffer, header_tree, payload_tree, footer_
         header_tree:add(service_id, port_id)
     else
         header_tree:add(subject_id, port_id)
+        extracted_subject_id = port_id
     end
     header_tree:add(service_not_message, snm)
     header_tree:add_le(data_specifier, buffer(6, 2))
@@ -223,9 +226,11 @@ local function dissect_cyphal_udp_v10(buffer, header_tree, payload_tree, footer_
     local len = buffer:len()
     local crc_size = (eot == 1) and 4 or 0
     local rem = len - CYPHAL_UDP_V10_HEADER_SIZE - crc_size -- the remaining bytes minus CRC32C (if EOT)
+    local payload_tvb = nil
     if rem > 0 then
         payload_tree:add_le(serialized_payload_size, rem)
         payload_tree:add_le(serialized_payload, buffer(CYPHAL_UDP_V10_HEADER_SIZE, rem))
+        payload_tvb = buffer(CYPHAL_UDP_V10_HEADER_SIZE, rem):tvb()
     end
     if eot == 1 then
         local captured_crc32_range = buffer(len - crc_size, 4)
@@ -239,6 +244,7 @@ local function dissect_cyphal_udp_v10(buffer, header_tree, payload_tree, footer_
             end
         end
     end
+    return extracted_subject_id, payload_tvb
 end
 
 --[[
@@ -256,10 +262,11 @@ uint64 topic_hash
 uint32 prefix_crc32c        # crc32c(payload[0:(frame_payload_offset+payload_size)])
 uint32 header_crc32c
 --]]
+-- Returns: subject_id (or nil), payload_tvb (or nil)
 local function dissect_cyphal_udp_v11(buffer, header_tree, payload_tree)
     if buffer:len() < CYPHAL_UDP_V11_HEADER_SIZE then
         header_tree:add_expert_info(PI_MALFORMED, PI_ERROR, "Truncated Cyphal/UDP v1.1 header")
-        return
+        return nil, nil
     end
     local head = buffer(0, 1):uint()
     local version_bits = bit.band(head, 0x1F)
@@ -278,6 +285,7 @@ local function dissect_cyphal_udp_v11(buffer, header_tree, payload_tree)
     header_tree:add_le(sender_uid, buffer(24, 8))
     header_tree:add_le(topic_hash, buffer(32, 8))
     -- Extract the subject-ID from the multicast group address.
+    local extracted_subject_id = nil
     local dst_ip = ipv4_destination_address_field()
     if dst_ip then
         local dst_ip_bytes = dst_ip.range:bytes()
@@ -285,7 +293,8 @@ local function dissect_cyphal_udp_v11(buffer, header_tree, payload_tree)
         if first_octet >= 224 and first_octet <= 239 then
             local dst_ip_val = dst_ip_bytes:get_index(1) * 0x10000 + dst_ip_bytes:get_index(2) * 0x100 +
                 dst_ip_bytes:get_index(3)
-            header_tree:add(subject_id, bit.band(dst_ip_val, 0x7FFFFF))
+            extracted_subject_id = bit.band(dst_ip_val, 0x7FFFFF)
+            header_tree:add(subject_id, extracted_subject_id)
         end
     end
     -- Handle the CRCs.
@@ -307,9 +316,11 @@ local function dissect_cyphal_udp_v11(buffer, header_tree, payload_tree)
     if ((fidx == 0) ~= (frame_payload_offset_val == 0)) then
         header_tree:add_expert_info(PI_PROTOCOL, PI_WARN, "First frame flags disagree with payload offset")
     end
+    local payload_tvb = nil
     if payload_len > 0 then
         payload_tree:add_le(serialized_payload_size, payload_len)
         payload_tree:add_le(serialized_payload, buffer(CYPHAL_UDP_V11_HEADER_SIZE, payload_len))
+        payload_tvb = buffer(CYPHAL_UDP_V11_HEADER_SIZE, payload_len):tvb()
     end
     local payload_range = buffer(CYPHAL_UDP_V11_HEADER_SIZE, math.max(payload_len, 0))
     -- For now we only validate the prefix CRC for the first frame only
@@ -320,24 +331,32 @@ local function dissect_cyphal_udp_v11(buffer, header_tree, payload_tree)
             header_tree:add_expert_info(PI_CHECKSUM, PI_WARN, "Prefix CRC mismatch")
         end
     end
+    return extracted_subject_id, payload_tvb
 end
 
--- Function to dissect the custom protocol
+local cyphal_subject_table = DissectorTable.new("cyphal.subject_id", "Cyphal Subject-ID", ftypes.UINT32)
+
 local function dissect_cyphal_udp(buffer, pinfo, tree)
     local header_tree = tree:add(cyphal_udp, buffer(), "Cyphal/UDP Header")
     local payload_tree = tree:add(cyphal_udp, buffer(), "Cyphal/UDP Payload")
 
     local head_byte = (buffer:len() > 0) and buffer(0, 1):uint() or 0
     local version_bits = bit.band(head_byte, 0x1F)
+    local subject_id_val, payload_tvb = nil, nil
     if (version_bits == 2) and (buffer:len() >= CYPHAL_UDP_V11_HEADER_SIZE) then
-        dissect_cyphal_udp_v11(buffer, header_tree, payload_tree)
+        subject_id_val, payload_tvb = dissect_cyphal_udp_v11(buffer, header_tree, payload_tree)
     elseif (version_bits == 1) and (buffer:len() >= CYPHAL_UDP_V10_HEADER_SIZE) then
         local footer_tree = tree:add(cyphal_udp, buffer(), "Cyphal/UDP Footer")
-        dissect_cyphal_udp_v10(buffer, header_tree, payload_tree, footer_tree)
+        subject_id_val, payload_tvb = dissect_cyphal_udp_v10(buffer, header_tree, payload_tree, footer_tree)
+    else
+        header_tree:add_expert_info(PI_PROTOCOL, PI_WARN, "Unsupported Cyphal/UDP version")
+    end
+    -- Call registered payload dissectors based on subject-ID
+    if subject_id_val and payload_tvb then
+        cyphal_subject_table:try(subject_id_val, payload_tvb, pinfo, tree)
     end
 end
 
--- UDP dissector
 local udp_dissector = Dissector.get("udp")
 
 -- Register the custom protocol dissector
