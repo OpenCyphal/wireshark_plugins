@@ -51,6 +51,19 @@ local crc32c_table = {
     0x79b737ba, 0x8bdcb4b9, 0x988c474d, 0x6ae7c44e, 0xbe2da0a5, 0x4c4623a6, 0x5f16d052, 0xad7d5351
 }
 
+--- Format a 64-bit little-endian value at the specified offset in the buffer as a 16-digit hex string.
+local function hex64(bytes, offset)
+    local lo = bytes:get_index(offset + 0) +
+        bytes:get_index(offset + 1) * 0x100 +
+        bytes:get_index(offset + 2) * 0x10000 +
+        bytes:get_index(offset + 3) * 0x1000000
+    local hi = bytes:get_index(offset + 4) +
+        bytes:get_index(offset + 5) * 0x100 +
+        bytes:get_index(offset + 6) * 0x10000 +
+        bytes:get_index(offset + 7) * 0x1000000
+    return string.format("%08x%08x", hi, lo)
+end
+
 --- CRC32-C (Castagnoli)
 --- @see https://users.ece.cmu.edu/~koopman/networks/dsn02/dsn02_koopman.pdf
 --- @see https://crc32c.machinezoo.com/
@@ -263,7 +276,7 @@ uint32 prefix_crc32c        # crc32c(payload[0:(frame_payload_offset+payload_siz
 uint32 header_crc32c
 --]]
 -- Returns: subject_id (or nil), payload_tvb (or nil)
-local function dissect_cyphal_udp_v11(buffer, header_tree, payload_tree)
+local function dissect_cyphal_udp_v11(buffer, pinfo, header_tree, payload_tree)
     if buffer:len() < CYPHAL_UDP_V11_HEADER_SIZE then
         header_tree:add_expert_info(PI_MALFORMED, PI_ERROR, "Truncated Cyphal/UDP v1.1 header")
         return nil, nil
@@ -272,9 +285,10 @@ local function dissect_cyphal_udp_v11(buffer, header_tree, payload_tree)
     local version_bits = bit.band(head, 0x1F)
     local priority_bits = bit.band(bit.rshift(head, 5), 0x07)
     local flags = buffer(1, 1):uint()
+    local ack_required_val = bit.band(flags, 0x01) ~= 0
     header_tree:add(version, buffer(0, 1), version_bits)
     header_tree:add(priority, buffer(0, 1), priority_bits)
-    header_tree:add(ack_required, buffer(1, 1), bit.band(flags, 0x01) ~= 0)
+    header_tree:add(ack_required, buffer(1, 1), ack_required_val)
     local fidx = buffer(4, 3):le_uint()
     header_tree:add_le(frame_index, buffer(4, 3), fidx)
     local frame_payload_offset_val = buffer(8, 4):le_uint()
@@ -331,6 +345,18 @@ local function dissect_cyphal_udp_v11(buffer, header_tree, payload_tree)
             header_tree:add_expert_info(PI_CHECKSUM, PI_WARN, "Prefix CRC mismatch")
         end
     end
+    -- Build the info string
+    local header_bytes = buffer(0, CYPHAL_UDP_V11_HEADER_SIZE):bytes()
+    pinfo.cols.info = string.format(
+        "%s %s %s #%s [%u:%u)/%u",
+        hex64(header_bytes, 24), -- source UID
+        ack_required_val and "⇉" or "→", -- more arrows indicate ack required (may be retransmissions)
+        hex64(header_bytes, 32), -- topic hash
+        hex64(header_bytes, 16), -- transfer-ID
+        frame_payload_offset_val,
+        frame_payload_offset_val + payload_len,
+        transfer_payload_size_val
+    )
     return extracted_subject_id, payload_tvb
 end
 
@@ -344,7 +370,7 @@ local function dissect_cyphal_udp(buffer, pinfo, tree)
     local version_bits = bit.band(head_byte, 0x1F)
     local subject_id_val, payload_tvb = nil, nil
     if (version_bits == 2) and (buffer:len() >= CYPHAL_UDP_V11_HEADER_SIZE) then
-        subject_id_val, payload_tvb = dissect_cyphal_udp_v11(buffer, header_tree, payload_tree)
+        subject_id_val, payload_tvb = dissect_cyphal_udp_v11(buffer, pinfo, header_tree, payload_tree)
     elseif (version_bits == 1) and (buffer:len() >= CYPHAL_UDP_V10_HEADER_SIZE) then
         local footer_tree = tree:add(cyphal_udp, buffer(), "Cyphal/UDP Footer")
         subject_id_val, payload_tvb = dissect_cyphal_udp_v10(buffer, header_tree, payload_tree, footer_tree)
