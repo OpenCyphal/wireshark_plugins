@@ -27,8 +27,10 @@ You may have to give your root password to install or `sudo cp`.
 The following BPF expression can be used to filter Cyphal/UDP traffic only (useful if the network traffic is high):
 
 ```
-udp and dst net 239.0.0.0 mask 255.0.0.0 and dst port 9382
+udp and dst port 9382
 ```
+
+You can also add `dst net 239.0.0.0 mask 255.0.0.0` to the expression to accept only multicast traffic, excluding P2P responses and auxiliary traffic.
 
 The Cyphal/UDP filter will automatically detect messages. The Cyphal/CAN filter however will not and will need to be added to the "Decode As" list. 
 
