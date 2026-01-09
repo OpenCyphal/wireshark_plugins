@@ -408,20 +408,11 @@ local function heuristic_checker(buffer, pinfo, tree)
     local version_bits = bit.band(buffer(0, 1):uint(), 0x1F)  -- First 5 bits contain the version, always.
 
     -- Try validating the datagram against known protocol versions.
+    -- v1.0 does not require heuristic matching because it always uses the constant destination port for all transfers.
     if version_bits == 2 and buffer:len() >= CYPHAL_UDP_V11_HEADER_SIZE then
         local header_crc_range = buffer(44, 4)
         local computed_header_crc = crc32c_calc(buffer(0, CYPHAL_UDP_V11_HEADER_SIZE - 4):bytes())
         if computed_header_crc == header_crc_range:le_uint() then
-            local subtree = tree:add(cyphal_udp, buffer(), PROTOCOL_NAME)
-            pinfo.cols.protocol = cyphal_udp.name
-            dissect_cyphal_udp(buffer, pinfo, subtree)
-            return true
-        end
-    elseif version_bits == 1 then
-        local header = buffer(0, CYPHAL_UDP_V10_HEADER_SIZE - 2):bytes()
-        local captured_crc16 = buffer(CYPHAL_UDP_V10_HEADER_SIZE - 2, 2):uint()
-        local computed_crc16 = crc16_ccitt(header)
-        if captured_crc16 == computed_crc16 then
             local subtree = tree:add(cyphal_udp, buffer(), PROTOCOL_NAME)
             pinfo.cols.protocol = cyphal_udp.name
             dissect_cyphal_udp(buffer, pinfo, subtree)
