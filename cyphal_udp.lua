@@ -108,8 +108,10 @@ local CYPHAL_UDP_PORT = 9382          -- The port number used by Cyphal/UDP
 local CYPHAL_UDP_V10_HEADER_SIZE = 24 -- The sizeof the Cyphal/UDP Header (v1.0)
 local CYPHAL_UDP_V11_HEADER_SIZE = 48 -- Size of the Cyphal/UDP Header (v1.1)
 local ANONYMOUS_UDP_NODE_ID = 65535   -- The Anonymous Node ID in Cyphal/UDP (not the same as in CAN!)
+local PROTOCOL_NAME = "Cyphal/UDP Protocol"
+
 -- Custom protocol dissector
-local cyphal_udp = Proto("cyphaludp", "Cyphal/UDP Protocol 1.x")
+local cyphal_udp = Proto("cyphaludp", PROTOCOL_NAME)
 
 ipv4_snm = ProtoField.bool("cyphal_udp.ip_service_not_message", "ip_service_not_message", base.NONE)
 version = ProtoField.uint8("cyphal_udp.version", "version", base.DEC)
@@ -388,7 +390,7 @@ local udp_dissector = Dissector.get("udp")
 -- Register the custom protocol dissector
 function cyphal_udp.dissector(buffer, pinfo, tree)
     if pinfo.dst_port == CYPHAL_UDP_PORT then
-        local subtree = tree:add(cyphal_udp, buffer(), "Cyphal/UDP Protocol")
+        local subtree = tree:add(cyphal_udp, buffer(), PROTOCOL_NAME)
         pinfo.cols.protocol = cyphal_udp.name
         dissect_cyphal_udp(buffer, pinfo, subtree)
     else
@@ -397,6 +399,41 @@ function cyphal_udp.dissector(buffer, pinfo, tree)
     end
 end
 
--- Register the custom protocol
+-- Heuristic dissector: checks if a UDP packet is Cyphal/UDP by validating the header CRC.
+-- This allows detection of response packets on ephemeral ports (not just port 9382).
+local function heuristic_checker(buffer, pinfo, tree)
+    if buffer:len() < 1 then
+        return false
+    end
+    local version_bits = bit.band(buffer(0, 1):uint(), 0x1F)  -- First 5 bits contain the version, always.
+
+    -- Try validating the datagram against known protocol versions.
+    if version_bits == 2 and buffer:len() >= CYPHAL_UDP_V11_HEADER_SIZE then
+        local header_crc_range = buffer(44, 4)
+        local computed_header_crc = crc32c_calc(buffer(0, CYPHAL_UDP_V11_HEADER_SIZE - 4):bytes())
+        if computed_header_crc == header_crc_range:le_uint() then
+            local subtree = tree:add(cyphal_udp, buffer(), PROTOCOL_NAME)
+            pinfo.cols.protocol = cyphal_udp.name
+            dissect_cyphal_udp(buffer, pinfo, subtree)
+            return true
+        end
+    elseif version_bits == 1 then
+        local header = buffer(0, CYPHAL_UDP_V10_HEADER_SIZE - 2):bytes()
+        local captured_crc16 = buffer(CYPHAL_UDP_V10_HEADER_SIZE - 2, 2):uint()
+        local computed_crc16 = crc16_ccitt(header)
+        if captured_crc16 == computed_crc16 then
+            local subtree = tree:add(cyphal_udp, buffer(), PROTOCOL_NAME)
+            pinfo.cols.protocol = cyphal_udp.name
+            dissect_cyphal_udp(buffer, pinfo, subtree)
+            return true
+        end
+    end
+    return false
+end
+
+-- Register heuristic dissector for UDP
+cyphal_udp:register_heuristic("udp", heuristic_checker)
+
+-- Register on the well-known port for non-heuristic detection
 local udp_port_table = DissectorTable.get("udp.port")
 udp_port_table:add(CYPHAL_UDP_PORT, cyphal_udp)

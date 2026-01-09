@@ -18,7 +18,6 @@ uint64 topic_hash
 uint40 topic_evictions
 int8 topic_log_age          # floor(log2(topic_age)); -1 for zero-age topics.
 void8
-uint8 TOPIC_NAME_MAX = 88
 utf8[<=TOPIC_NAME_MAX] topic_name
 --]]
 
