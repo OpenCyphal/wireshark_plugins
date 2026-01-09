@@ -132,8 +132,8 @@ user_data = ProtoField.uint16("cyphal_udp.user_data", "user_data", base.HEX)
 crc16_ccitt_false = ProtoField.uint16("cyphal_udp.crc16_ccitt_false", "CRC16-CCITT-FALSE (BE)", base.HEX)
 computed_crc16_ccitt_false = ProtoField.uint16("cyphal_udp.computed_crc16_ccitt_false", "CRC16-CCITT-FALSE [Computed]",
     base.HEX)
-serialized_payload = ProtoField.bytes("cyphal_udp.serialized_payload", "serialized_payload", base.SPACE)
-serialized_payload_size = ProtoField.uint32("cyphal_udp.serialized_payload_size", "serialized_payload_size", base.DEC)
+frame_payload = ProtoField.bytes("cyphal_udp.frame_payload", "frame_payload", base.SPACE)
+frame_payload_size = ProtoField.uint32("cyphal_udp.frame_payload_size", "frame_payload_size", base.DEC)
 computed_crc32 = ProtoField.uint32("cyphal_udp.computed_crc32", "CRC32-C [Computed]", base.HEX)
 crc32 = ProtoField.uint32("cyphal_udp.crc32", "CRC32-C (LE)", base.HEX)
 frame_payload_offset = ProtoField.uint32("cyphal_udp.frame_payload_offset", "frame_payload_offset", base.DEC)
@@ -144,6 +144,10 @@ prefix_crc32c = ProtoField.uint32("cyphal_udp.prefix_crc32c", "prefix_crc32c", b
 computed_prefix_crc32c = ProtoField.uint32("cyphal_udp.computed_prefix_crc32c", "prefix_crc32c [Computed]", base.HEX)
 header_crc32c = ProtoField.uint32("cyphal_udp.header_crc32c", "header_crc32c", base.HEX)
 computed_header_crc32c = ProtoField.uint32("cyphal_udp.computed_header_crc32c", "header_crc32c [Computed]", base.HEX)
+local p2p_kind_values = { [0] = "response data", [1] = "ack", }
+p2p_kind = ProtoField.uint8("cyphal_udp.p2p_kind", "P2P kind", base.DEC, p2p_kind_values)
+p2p_origin_topic_hash = ProtoField.uint64("cyphal_udp.p2p_origin_topic_hash", "P2P origin topic hash", base.HEX)
+p2p_origin_transfer_id = ProtoField.uint64("cyphal_udp.p2p_origin_transfer_id", "P2P origin transfer-ID", base.HEX)
 
 -- Protocol fields
 cyphal_udp.fields = {
@@ -163,8 +167,8 @@ cyphal_udp.fields = {
     user_data,
     crc16_ccitt_false,
     computed_crc16_ccitt_false,
-    serialized_payload,
-    serialized_payload_size,
+    frame_payload,
+    frame_payload_size,
     computed_crc32,
     crc32,
     frame_payload_offset,
@@ -174,8 +178,10 @@ cyphal_udp.fields = {
     prefix_crc32c,
     computed_prefix_crc32c,
     header_crc32c,
-    computed_header_crc32c
-    -- Add more fields as needed
+    computed_header_crc32c,
+    p2p_kind,
+    p2p_origin_topic_hash,
+    p2p_origin_transfer_id
 }
 
 crc16_mismatch_expert = ProtoExpert.new("cyphal_udp.crc16_match", "crc16_match", expert.group.CHECKSUM,
@@ -243,8 +249,8 @@ local function dissect_cyphal_udp_v10(buffer, header_tree, payload_tree, footer_
     local rem = len - CYPHAL_UDP_V10_HEADER_SIZE - crc_size -- the remaining bytes minus CRC32C (if EOT)
     local payload_tvb = nil
     if rem > 0 then
-        payload_tree:add_le(serialized_payload_size, rem)
-        payload_tree:add_le(serialized_payload, buffer(CYPHAL_UDP_V10_HEADER_SIZE, rem))
+        payload_tree:add_le(frame_payload_size, rem)
+        payload_tree:add_le(frame_payload, buffer(CYPHAL_UDP_V10_HEADER_SIZE, rem))
         payload_tvb = buffer(CYPHAL_UDP_V10_HEADER_SIZE, rem):tvb()
     end
     if eot == 1 then
@@ -300,6 +306,7 @@ local function dissect_cyphal_udp_v11(buffer, pinfo, header_tree, payload_tree)
     header_tree:add_le(transfer_id, buffer(16, 8))
     header_tree:add_le(sender_uid, buffer(24, 8))
     header_tree:add_le(topic_hash, buffer(32, 8))
+
     -- Extract the subject-ID from the multicast group address.
     local extracted_subject_id = nil
     local dst_ip = ipv4_destination_address_field()
@@ -313,6 +320,7 @@ local function dissect_cyphal_udp_v11(buffer, pinfo, header_tree, payload_tree)
             header_tree:add(subject_id, extracted_subject_id)
         end
     end
+
     -- Handle the CRCs.
     local prefix_crc_range = buffer(40, 4)
     local header_crc_range = buffer(44, 4)
@@ -324,33 +332,59 @@ local function dissect_cyphal_udp_v11(buffer, pinfo, header_tree, payload_tree)
         header_tree:add_expert_info(PI_CHECKSUM, PI_WARN, "Header CRC mismatch")
     end
     local len = buffer:len()
-    local payload_len = len - CYPHAL_UDP_V11_HEADER_SIZE
-    local frame_end = frame_payload_offset_val + payload_len
+    local frame_end = frame_payload_offset_val + len - CYPHAL_UDP_V11_HEADER_SIZE
     if frame_end > transfer_payload_size_val then
         header_tree:add_expert_info(PI_PROTOCOL, PI_WARN, "Frame exceeds declared transfer size")
     end
     if ((fidx == 0) ~= (frame_payload_offset_val == 0)) then
         header_tree:add_expert_info(PI_PROTOCOL, PI_WARN, "First frame flags disagree with payload offset")
     end
-    local payload_tvb = nil
-    if payload_len > 0 then
-        payload_tree:add_le(serialized_payload_size, payload_len)
-        payload_tree:add_le(serialized_payload, buffer(CYPHAL_UDP_V11_HEADER_SIZE, payload_len))
-        payload_tvb = buffer(CYPHAL_UDP_V11_HEADER_SIZE, payload_len):tvb()
-    end
-    local payload_range = buffer(CYPHAL_UDP_V11_HEADER_SIZE, math.max(payload_len, 0))
+
     -- For now we only validate the prefix CRC for the first frame only
     if frame_payload_offset_val == 0 then
-        local computed_prefix_crc = crc32c_calc(payload_range:bytes())
+        local computed_prefix_crc = crc32c_calc(buffer(CYPHAL_UDP_V11_HEADER_SIZE, len - CYPHAL_UDP_V11_HEADER_SIZE):bytes())
         header_tree:add(computed_prefix_crc32c, computed_prefix_crc)
         if computed_prefix_crc ~= prefix_crc_range:le_uint() then
             header_tree:add_expert_info(PI_CHECKSUM, PI_WARN, "Prefix CRC mismatch")
         end
     end
+
+    local payload_len = len - CYPHAL_UDP_V11_HEADER_SIZE
+    local payload_offset = CYPHAL_UDP_V11_HEADER_SIZE
+
+    -- Handle P2P traffic. Its payload contains a fixed-size header which we parse here.
+    local has_p2p_header = ((extracted_subject_id == nil) and (frame_payload_offset_val == 0) and
+        (transfer_payload_size_val >= 24) and (payload_len >= 24))
+    local p2p_kind_val = nil
+    if has_p2p_header then
+        local p2p_offset = CYPHAL_UDP_V11_HEADER_SIZE
+        p2p_kind_val = buffer(p2p_offset, 1):uint()
+        payload_tree:add_le(p2p_kind, buffer(p2p_offset, 1))
+        payload_tree:add_le(p2p_origin_topic_hash, buffer(p2p_offset + 8, 8))
+        payload_tree:add_le(p2p_origin_transfer_id, buffer(p2p_offset + 16, 8))
+        payload_len = payload_len - 24
+        payload_offset = payload_offset + 24
+    end
+
+    -- Handle the payload
+    local payload_tvb = nil
+    if payload_len > 0 then
+        payload_tree:add_le(frame_payload_size, payload_len)
+        payload_tree:add_le(frame_payload, buffer(payload_offset, payload_len))
+        payload_tvb = buffer(payload_offset, payload_len):tvb()
+    end
+
     -- Build the info string
     local header_bytes = buffer(0, CYPHAL_UDP_V11_HEADER_SIZE):bytes()
+    local info_prefix
+    if extracted_subject_id ~= nil  then info_prefix = "📨"  -- multicast message publication
+    elseif p2p_kind_val == 0        then info_prefix = "🔙"  -- p2p response
+    elseif p2p_kind_val == 1        then info_prefix = "✔"  -- p2p ack
+    else                                 info_prefix = "⁉"  -- unknown
+    end
     pinfo.cols.info = string.format(
-        "%s %s %s #%s [%u:%u)/%u",
+        "%s %s %s %s #%s [%u:%u)/%u",
+        info_prefix,
         hex64(header_bytes, 24), -- source UID
         ack_required_val and "⇉" or "→", -- more arrows indicate ack required (may be retransmissions)
         hex64(header_bytes, 32), -- topic hash
@@ -379,10 +413,14 @@ local function dissect_cyphal_udp(buffer, pinfo, tree)
     else
         header_tree:add_expert_info(PI_PROTOCOL, PI_WARN, "Unsupported Cyphal/UDP version")
     end
-    -- Call registered payload dissectors based on subject-ID
+    -- Call registered payload dissectors based on subject-ID (only if one is registered)
     if subject_id_val and payload_tvb then
-        cyphal_subject_table:try(subject_id_val, payload_tvb, pinfo, tree)
+        local subdissector = cyphal_subject_table:get_dissector(subject_id_val)
+        if subdissector then
+            subdissector:call(payload_tvb, pinfo, tree)
+        end
     end
+    return buffer:len()
 end
 
 local udp_dissector = Dissector.get("udp")
@@ -392,10 +430,11 @@ function cyphal_udp.dissector(buffer, pinfo, tree)
     if pinfo.dst_port == CYPHAL_UDP_PORT then
         local subtree = tree:add(cyphal_udp, buffer(), PROTOCOL_NAME)
         pinfo.cols.protocol = cyphal_udp.name
-        dissect_cyphal_udp(buffer, pinfo, subtree)
+        return dissect_cyphal_udp(buffer, pinfo, subtree)
     else
         -- Call the default UDP dissector for other ports
         udp_dissector:call(buffer, pinfo, tree)
+        return 0
     end
 end
 
@@ -416,7 +455,7 @@ local function heuristic_checker(buffer, pinfo, tree)
             local subtree = tree:add(cyphal_udp, buffer(), PROTOCOL_NAME)
             pinfo.cols.protocol = cyphal_udp.name
             dissect_cyphal_udp(buffer, pinfo, subtree)
-            return true
+            return buffer:len()
         end
     end
     return false
