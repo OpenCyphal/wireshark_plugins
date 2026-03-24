@@ -44,7 +44,7 @@ local request_or_responseTable = {
     [0] = "Response",
     [1] = "Request"
 }
-cypahl_can_request_not_response = ProtoField.uint32("cyphal_can.request_not_response", "Service Type", base.DEC, request_or_responseTable, 0x01000000)
+cyphal_can_request_not_response = ProtoField.uint32("cyphal_can.request_not_response", "Service Type", base.DEC, request_or_responseTable, 0x01000000)
 local anonymousTable = {
     [0] = "Regular",
     [1] = "Anonymous"
@@ -66,7 +66,7 @@ cyphal_can.fields = {
     cyphal_can_priority,
     cyphal_can_len,
     cyphal_can_service_not_message,
-    cypahl_can_request_not_response,
+    cyphal_can_request_not_response,
     cyphal_can_anonymous,
     cyphal_can_subject_id,
     cyphal_can_service_id,
@@ -130,7 +130,7 @@ function cyphal_can.dissector(buffer, pinfo, tree)
 
     if (snm == 1) then -- Services
       local rnr = bit.band(bit.rshift(can_id, 24), 0x1)
-      header_tree:add(cypahl_can_request_not_response, can_id)
+      header_tree:add(cyphal_can_request_not_response, can_id)
       local r23 = bit.band(bit.rshift(can_id, 23), 0x1)
       if r23 ~= 0 then -- not equal to
           header_tree:add_expert_info(PI_MALFORMED, PI_WARN, "Reserved (23) is incorrect")
