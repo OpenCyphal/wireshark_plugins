@@ -30,7 +30,7 @@ You may have to give your root password to install or `sudo cp`. The v1.1 dissec
 
 `cyphal_1v1.lua` normally recognizes extended Cyphal automatically. It can also be selected using "Decode As".
 
-To filter Cyphal/UDP, use the following BPF expression: `udp and dst port 9382`
+BPF capture filter: `udp`; display filter: `cyphal11`.
 
 ### Cyphal/UDP v1.0
 
