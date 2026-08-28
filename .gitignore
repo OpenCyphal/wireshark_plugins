@@ -1,0 +1,5 @@
+/tests/*.pcap
+/tests/*.pcapng
+/tests/generate_can_vectors
+/tests/generate_udp_vectors
+/tests/vectors-manifest.tsv

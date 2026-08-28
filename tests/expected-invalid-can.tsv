@@ -1,0 +1,9 @@
+frame.number	_ws.col.def_src	_ws.col.def_dst	cyphal11.type	cyphalcan11.crc_good	_ws.expert.message	_ws.col.info
+1	42	S0000ab55	0		Illegal classic-CAN/CAN-FD data length|Cyphal v1 transfers must start with toggle=1|Calculated topic subject-ID does not match the transport subject-ID	🔹 📨 BE prio=4 tid=1 T0807060504030201@S0000951f tag=100f0e0d0c0b0a09 0 B
+2	42	S0000ab55	0		Session header is shorter than 24 bytes	🔹 ⚠️ v1.1 prio=4 tid=2 short=3 B
+3	42	S0000ab56	0		Message incompatibility byte is nonzero|Log-age is outside [-1, 35]|Calculated topic subject-ID does not match the transport subject-ID	🔹 📨 BE prio=4 tid=3 T6a674f35893fc6f1@S0000ab55 tag=0000000000000001 7 B
+6	42	S0000ab55	0	False	Transfer CRC mismatch	… 📨 BE prio=4 tid=4 T6a674f35893fc6f1@S0000ab55 tag=0000000000000002 131 B
+7	42	S0000ab55			Orphan continuation/end frame	… CAN1.1 prio=4 tid=1 frag=0
+8	42	S0000ab55	200		Unsupported session type 200	🔹 ⚠️ TYPE-200 prio=4 tid=5 30 B
+9	42	S0000ffb4/G065	8		Gossip name is not printable normalized ASCII	🔹 📢 GOSSIP prio=4 tid=6 T6a674f35893fc6f1@S0000ab55 e=0 lage=-1 '//bad//name/'
+10	42	S0000ffb4/G065	8		Gossip name does not match its topic hash	🔹 📢 GOSSIP prio=4 tid=7 T6a674f35893fc6f1@S0000ab55 e=0 lage=-1 'other/topic'
